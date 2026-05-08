@@ -6,6 +6,10 @@ Reads `~/.claude/projects/**/*.jsonl` and `~/.codex/sessions/**/*.jsonl`
 directly off your disk, aggregates with polars, serves a single-file HTML on
 `localhost:8765`. No auth, no upload, no telemetry.
 
+<p align="center">
+  <img src="assets/image.png" alt="tokmeter dashboard" width="900" />
+</p>
+
 ```bash
 uvx tokmeter
 ```
