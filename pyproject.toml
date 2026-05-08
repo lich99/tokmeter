@@ -34,13 +34,18 @@ Repository = "https://github.com/lich99/tokmeter"
 Issues = "https://github.com/lich99/tokmeter/issues"
 
 [tool.hatch.build.targets.wheel]
-# Source tree is flat (tokmeter.py + dashboard.html at root) so PEP 723
-# `uv run tokmeter.py` works without restructuring. For the installed wheel
-# we relocate both files into a tokmeter/ package so they live alongside one
-# another in site-packages and Path(__file__).parent / "dashboard.html"
-# resolves correctly. Same lookup works in both modes.
-only-include = ["tokmeter.py", "dashboard.html"]
-sources = { "tokmeter.py" = "tokmeter/__init__.py", "dashboard.html" = "tokmeter/dashboard.html" }
+# Source tree stays flat (tokmeter.py + dashboard.html at repo root) so
+# `uv run tokmeter.py` (PEP 723 single-file mode) works without restructuring.
+# For the installed wheel we relocate both files into a tokmeter/ package so
+# they live together in site-packages/tokmeter/ — keeps site-packages root
+# tidy and lets Path(__file__).parent / "dashboard.html" resolve in both
+# modes. Empty `packages` disables hatchling's auto-discovery (which would
+# otherwise ship tokmeter.py at the wheel root).
+packages = []
+
+[tool.hatch.build.targets.wheel.force-include]
+"tokmeter.py" = "tokmeter/__init__.py"
+"dashboard.html" = "tokmeter/dashboard.html"
 
 [tool.hatch.build.targets.sdist]
 include = ["tokmeter.py", "dashboard.html", "README.md", "LICENSE", "pyproject.toml"]
