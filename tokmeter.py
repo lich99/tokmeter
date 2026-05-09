@@ -15,6 +15,7 @@ Usage:
 """
 import argparse
 import bisect
+import errno
 import glob
 import http.server
 import json
@@ -856,6 +857,24 @@ class ReusableTCPServer(socketserver.ThreadingTCPServer):
     allow_reuse_address = True
     daemon_threads = True
 
+def _bind_with_fallback(host, requested_port, max_offset=20):
+    """Try ports in [requested_port, requested_port+max_offset). Return the
+    bound server + actual port. Re-raises if every port in the range is busy
+    or if the failure is anything other than EADDRINUSE."""
+    last_err = None
+    for offset in range(max_offset):
+        port = requested_port + offset
+        try:
+            return ReusableTCPServer((host, port), Handler), port
+        except OSError as e:
+            if e.errno != errno.EADDRINUSE:
+                raise
+            last_err = e
+            if offset == 0:
+                print(f"  port {port} in use, trying next…")
+    raise last_err
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--port", type=int, default=int(os.environ.get("TOKMETER_PORT", os.environ.get("CLAUDE_USAGE_PORT", DEFAULT_PORT))))
@@ -868,14 +887,15 @@ def main():
     stats = refresh(force=True)
     print(f"  {stats['scanned']} files scanned in {time.time()-t0:.1f}s")
 
-    url = f"http://{args.host}:{args.port}/"
+    srv, port = _bind_with_fallback(args.host, args.port)
+    url = f"http://{args.host}:{port}/"
     print(f"\n  tokmeter")
     print(f"  → {url}\n")
 
     if not args.no_open:
         threading.Timer(0.5, lambda: webbrowser.open(url)).start()
 
-    with ReusableTCPServer((args.host, args.port), Handler) as srv:
+    with srv:
         try:
             srv.serve_forever()
         except KeyboardInterrupt:
