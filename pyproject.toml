@@ -1,51 +1,40 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
 
 [project]
 name = "tokmeter"
-version = "0.1.1"
-description = "Local dashboard for Claude Code & Codex CLI token cost"
+version = "0.2.0"
+description = "Fast, local Claude Code and Codex token usage dashboard"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
-authors = [{ name = "lich99" }]
-keywords = ["claude-code", "codex", "anthropic", "openai", "cost", "tokens", "dashboard"]
-classifiers = [
-  "Development Status :: 4 - Beta",
-  "Environment :: Console",
-  "Environment :: Web Environment",
-  "Intended Audience :: Developers",
-  "License :: OSI Approved :: MIT License",
-  "Operating System :: OS Independent",
-  "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3 :: Only",
-  "Topic :: Software Development",
-  "Topic :: Utilities",
-]
-dependencies = ["polars>=1.0"]
+authors = [{name = "lich99", email = "lichenghai99@gmail.com"}]
+dependencies = ["polars>=1.30", "numpy>=1.24", "tzdata>=2025.1; sys_platform == 'win32'"]
 
 [project.scripts]
-tokmeter = "tokmeter:main"
+tokmeter = "tokmeter.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/lich99/tokmeter"
 Repository = "https://github.com/lich99/tokmeter"
 Issues = "https://github.com/lich99/tokmeter/issues"
 
-[tool.hatch.build.targets.wheel]
-# Source tree stays flat (tokmeter.py + dashboard.html at repo root) so
-# `uv run tokmeter.py` (PEP 723 single-file mode) works without restructuring.
-# For the installed wheel we relocate both files into a tokmeter/ package so
-# they live together in site-packages/tokmeter/ — keeps site-packages root
-# tidy and lets Path(__file__).parent / "dashboard.html" resolve in both
-# modes. Empty `packages` disables hatchling's auto-discovery (which would
-# otherwise ship tokmeter.py at the wheel root).
-packages = []
+[dependency-groups]
+dev = ["pytest>=8", "maturin>=1.9,<2"]
 
-[tool.hatch.build.targets.wheel.force-include]
-"tokmeter.py" = "tokmeter/__init__.py"
-"dashboard.html" = "tokmeter/dashboard.html"
+[tool.maturin]
+manifest-path = "native/Cargo.toml"
+python-source = "python"
+module-name = "tokmeter._native"
+features = ["pyo3/extension-module"]
+include = ["python/tokmeter/static/**/*", "python/tokmeter/prices.json", { path = "tests/**/*", format = "sdist" }, { path = "scripts/benchmark.py", format = "sdist" }]
 
-[tool.hatch.build.targets.sdist]
-include = ["tokmeter.py", "dashboard.html", "README.md", "LICENSE", "pyproject.toml"]
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]

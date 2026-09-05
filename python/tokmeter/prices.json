@@ -1,0 +1,381 @@
+{
+  "version": "2026-09-05",
+  "basis": "API-equivalent estimate at published reference prices; not an invoice",
+  "sources": [
+    "https://developers.openai.com/api/docs/pricing",
+    "https://platform.claude.com/docs/en/about-claude/pricing"
+  ],
+  "aliases": {
+    "gpt-5.6": "gpt-5.6-sol"
+  },
+  "models": {
+    "claude-opus-4-7": {
+      "input": 5.0,
+      "cached": 0,
+      "output": 25.0,
+      "cw5m": 6.25,
+      "cw1h": 10.0,
+      "cr": 0.5
+    },
+    "claude-opus-4-6": {
+      "input": 5.0,
+      "cached": 0,
+      "output": 25.0,
+      "cw5m": 6.25,
+      "cw1h": 10.0,
+      "cr": 0.5
+    },
+    "claude-opus-4-5": {
+      "input": 5.0,
+      "cached": 0,
+      "output": 25.0,
+      "cw5m": 6.25,
+      "cw1h": 10.0,
+      "cr": 0.5
+    },
+    "claude-opus-4-1": {
+      "input": 15.0,
+      "cached": 0,
+      "output": 75.0,
+      "cw5m": 18.75,
+      "cw1h": 30.0,
+      "cr": 1.5
+    },
+    "claude-opus-4": {
+      "input": 15.0,
+      "cached": 0,
+      "output": 75.0,
+      "cw5m": 18.75,
+      "cw1h": 30.0,
+      "cr": 1.5
+    },
+    "claude-sonnet-4-6": {
+      "input": 3.0,
+      "cached": 0,
+      "output": 15.0,
+      "cw5m": 3.75,
+      "cw1h": 6.0,
+      "cr": 0.3
+    },
+    "claude-sonnet-4-5": {
+      "input": 3.0,
+      "cached": 0,
+      "output": 15.0,
+      "cw5m": 3.75,
+      "cw1h": 6.0,
+      "cr": 0.3
+    },
+    "claude-sonnet-4": {
+      "input": 3.0,
+      "cached": 0,
+      "output": 15.0,
+      "cw5m": 3.75,
+      "cw1h": 6.0,
+      "cr": 0.3
+    },
+    "claude-haiku-4-5": {
+      "input": 1.0,
+      "cached": 0,
+      "output": 5.0,
+      "cw5m": 1.25,
+      "cw1h": 2.0,
+      "cr": 0.1
+    },
+    "claude-haiku-3-5": {
+      "input": 0.8,
+      "cached": 0,
+      "output": 4.0,
+      "cw5m": 1.0,
+      "cw1h": 1.6,
+      "cr": 0.08
+    },
+    "gpt-5.5-pro": {
+      "input": 30.0,
+      "cached": 0.0,
+      "output": 180.0,
+      "cw5m": 0,
+      "cw1h": 0,
+      "cr": 0
+    },
+    "gpt-5.5": {
+      "input": 5.0,
+      "cached": 0.5,
+      "output": 30.0,
+      "cw5m": 0,
+      "cw1h": 0,
+      "cr": 0,
+      "long": {
+        "threshold": 272000,
+        "input": 10.0,
+        "cached": 1.0,
+        "output": 45.0
+      }
+    },
+    "gpt-5.4-pro": {
+      "input": 30.0,
+      "cached": 0.0,
+      "output": 180.0,
+      "cw5m": 0,
+      "cw1h": 0,
+      "cr": 0,
+      "long": {
+        "threshold": 272000,
+        "input": 60.0,
+        "cached": 0.0,
+        "output": 270.0
+      }
+    },
+    "gpt-5.4-mini": {
+      "input": 0.75,
+      "cached": 0.075,
+      "output": 4.5,
+      "cw5m": 0,
+      "cw1h": 0,
+      "cr": 0
+    },
+    "gpt-5.4-nano": {
+      "input": 0.2,
+      "cached": 0.02,
+      "output": 1.25,
+      "cw5m": 0,
+      "cw1h": 0,
+      "cr": 0
+    },
+    "gpt-5.4": {
+      "input": 2.5,
+      "cached": 0.25,
+      "output": 15.0,
+      "cw5m": 0,
+      "cw1h": 0,
+      "cr": 0,
+      "long": {
+        "threshold": 272000,
+        "input": 5.0,
+        "cached": 0.5,
+        "output": 22.5
+      }
+    },
+    "gpt-5.3-codex": {
+      "input": 1.75,
+      "cached": 0.175,
+      "output": 14.0,
+      "cw5m": 0,
+      "cw1h": 0,
+      "cr": 0
+    },
+    "gpt-5.2-codex": {
+      "input": 1.75,
+      "cached": 0.175,
+      "output": 14.0,
+      "cw5m": 0,
+      "cw1h": 0,
+      "cr": 0
+    },
+    "gpt-5.2-pro": {
+      "input": 21.0,
+      "cached": 0.0,
+      "output": 168.0,
+      "cw5m": 0,
+      "cw1h": 0,
+      "cr": 0
+    },
+    "gpt-5.2": {
+      "input": 1.75,
+      "cached": 0.175,
+      "output": 14.0,
+      "cw5m": 0,
+      "cw1h": 0,
+      "cr": 0
+    },
+    "gpt-5.1-codex-max": {
+      "input": 1.25,
+      "cached": 0.125,
+      "output": 10.0,
+      "cw5m": 0,
+      "cw1h": 0,
+      "cr": 0
+    },
+    "gpt-5.1-codex": {
+      "input": 1.25,
+      "cached": 0.125,
+      "output": 10.0,
+      "cw5m": 0,
+      "cw1h": 0,
+      "cr": 0
+    },
+    "gpt-5.1": {
+      "input": 1.25,
+      "cached": 0.125,
+      "output": 10.0,
+      "cw5m": 0,
+      "cw1h": 0,
+      "cr": 0
+    },
+    "gpt-5-codex": {
+      "input": 1.25,
+      "cached": 0.125,
+      "output": 10.0,
+      "cw5m": 0,
+      "cw1h": 0,
+      "cr": 0
+    },
+    "gpt-5-pro": {
+      "input": 15.0,
+      "cached": 0.0,
+      "output": 120.0,
+      "cw5m": 0,
+      "cw1h": 0,
+      "cr": 0
+    },
+    "gpt-5-mini": {
+      "input": 0.25,
+      "cached": 0.025,
+      "output": 2.0,
+      "cw5m": 0,
+      "cw1h": 0,
+      "cr": 0
+    },
+    "gpt-5-nano": {
+      "input": 0.05,
+      "cached": 0.005,
+      "output": 0.4,
+      "cw5m": 0,
+      "cw1h": 0,
+      "cr": 0
+    },
+    "gpt-5": {
+      "input": 1.25,
+      "cached": 0.125,
+      "output": 10.0,
+      "cw5m": 0,
+      "cw1h": 0,
+      "cr": 0
+    },
+    "gpt-6-astra": {
+      "input": 10,
+      "cached": 1,
+      "output": 50,
+      "cw5m": 0,
+      "cw1h": 0,
+      "cr": 0,
+      "long": {
+        "threshold": 272000,
+        "input": 20,
+        "cached": 2,
+        "output": 75.0
+      },
+      "fast_multiplier": 2,
+      "priority_multiplier": 2,
+      "flex_multiplier": 0.5
+    },
+    "gpt-5.6-sol": {
+      "input": 4,
+      "cached": 0.4,
+      "output": 20,
+      "cw5m": 0,
+      "cw1h": 0,
+      "cr": 0,
+      "long": {
+        "threshold": 272000,
+        "input": 8,
+        "cached": 0.8,
+        "output": 30.0
+      },
+      "fast_multiplier": 2,
+      "priority_multiplier": 2,
+      "flex_multiplier": 0.5
+    },
+    "gpt-5.6-terra": {
+      "input": 2,
+      "cached": 0.2,
+      "output": 12,
+      "cw5m": 0,
+      "cw1h": 0,
+      "cr": 0,
+      "long": {
+        "threshold": 272000,
+        "input": 4,
+        "cached": 0.4,
+        "output": 18.0
+      },
+      "fast_multiplier": 2,
+      "priority_multiplier": 2,
+      "flex_multiplier": 0.5
+    },
+    "gpt-5.6-luna": {
+      "input": 0.2,
+      "cached": 0.02,
+      "output": 1.2,
+      "cw5m": 0,
+      "cw1h": 0,
+      "cr": 0,
+      "long": {
+        "threshold": 272000,
+        "input": 0.4,
+        "cached": 0.04,
+        "output": 1.8
+      },
+      "fast_multiplier": 2,
+      "priority_multiplier": 2,
+      "flex_multiplier": 0.5
+    },
+    "claude-opus-4-8": {
+      "input": 5,
+      "cached": 0,
+      "output": 25,
+      "cw5m": 6.25,
+      "cw1h": 10,
+      "cr": 0.5,
+      "fast_multiplier": 2
+    },
+    "claude-opus-5": {
+      "input": 5,
+      "cached": 0,
+      "output": 25,
+      "cw5m": 6.25,
+      "cw1h": 10,
+      "cr": 0.5,
+      "fast_multiplier": 2
+    },
+    "claude-fable-5": {
+      "input": 10,
+      "cached": 0,
+      "output": 50,
+      "cw5m": 12.5,
+      "cw1h": 20,
+      "cr": 1.0
+    },
+    "claude-fable-5-1": {
+      "input": 10,
+      "cached": 0,
+      "output": 50,
+      "cw5m": 12.5,
+      "cw1h": 20,
+      "cr": 0.25
+    },
+    "claude-mythos-5": {
+      "input": 10,
+      "cached": 0,
+      "output": 50,
+      "cw5m": 12.5,
+      "cw1h": 20,
+      "cr": 1.0
+    },
+    "claude-mythos-5-1": {
+      "input": 10,
+      "cached": 0,
+      "output": 50,
+      "cw5m": 12.5,
+      "cw1h": 20,
+      "cr": 0.25
+    },
+    "claude-sonnet-5": {
+      "input": 2,
+      "cached": 0,
+      "output": 10,
+      "cw5m": 2.5,
+      "cw1h": 4,
+      "cr": 0.2
+    }
+  }
+}

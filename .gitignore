@@ -11,3 +11,10 @@ venv/
 *.swp
 .vscode/
 .idea/
+native/target/
+*.so
+*.dylib
+*.pyd
+.pytest_cache/
+
+.ruff_cache/

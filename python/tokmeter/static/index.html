@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>tokmeter</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230A0A0A'/%3E%3Crect x='20' y='0' width='12' height='12' fill='%23F5CD19'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="/static/vendor/uPlot.min.css">
+<script src="/static/vendor/chart.umd.min.js"></script>
+<script src="/static/vendor/uPlot.iife.min.js"></script>
+<link rel="stylesheet" href="/static/style.css?v=0.2.0">
+</head>
+<body>
+
+<div class="shell">
+
+  <header>
+    <div class="brand">
+      <div class="brand-mark"></div>
+      <div class="brand-text">
+        <div class="lockup">Codex × Claude · Usage</div>
+        <div class="sub">API-equivalent estimates · local sessions</div>
+      </div>
+    </div>
+    <div class="head-right">
+      <div class="source-tabs" id="source-tabs">
+        <button class="src-tab active" data-src="cc"    type="button"><span>Claude Code</span></button>
+        <button class="src-tab" data-src="codex" type="button"><span>Codex</span></button>
+        <button class="src-tab" data-src="all" type="button"><span>All sources</span></button>
+      </div>
+      <div class="gen" id="gen-info"><span class="live-dot"></span>loading…</div>
+      <button class="icon-btn" id="refresh-btn" title="Re-scan local sessions">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square" stroke-linejoin="miter"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg>
+        Refresh
+      </button>
+    </div>
+  </header>
+
+  <div class="controls">
+    <label>From <span id="from" class="dt-field" tabindex="-1"></span></label>
+    <label>To <span id="to" class="dt-field" tabindex="-1"></span></label>
+    <div class="field"><span class="field-label">Timezone</span>
+      <div class="dropdown" id="dd-tz" data-value="ET"
+           data-options='[{"v":"ET","l":"America/New_York"},{"v":"LOCAL","l":"Local"},{"v":"UTC","l":"UTC"}]'>
+        <button class="dropdown-trigger" type="button">
+          <span class="dropdown-value">America/New_York</span>
+          <span class="dropdown-arrow"></span>
+        </button>
+      </div>
+    </div>
+    <div class="field"><span class="field-label">Bucket</span>
+      <div class="dropdown" id="dd-bucket" data-value="auto"
+           data-options='[{"v":"auto","l":"Auto"},{"v":"1m","l":"1 min"},{"v":"5m","l":"5 min"},{"v":"15m","l":"15 min"},{"v":"30m","l":"30 min"},{"v":"1h","l":"1 hour"},{"v":"6h","l":"6 hours"},{"v":"1d","l":"1 day"}]'>
+        <button class="dropdown-trigger" type="button">
+          <span class="dropdown-value">Auto</span>
+          <span class="dropdown-arrow"></span>
+        </button>
+      </div>
+    </div>
+    <div class="field"><span class="field-label">Skip gaps</span>
+      <button class="toggle-btn" id="toggle-gaps" type="button" aria-pressed="false">
+        <span>Off</span>
+      </button>
+    </div>
+    <div class="presets" id="presets">
+      <button class="preset" data-h="1"><span>1h</span></button>
+      <button class="preset" data-h="5"><span>5h</span></button>
+      <button class="preset" data-h="24"><span>24h</span></button>
+      <button class="preset" data-h="168"><span>7d</span></button>
+      <button class="preset" data-h="720"><span>30d</span></button>
+      <button class="preset" data-h="all"><span>All</span></button>
+    </div>
+  </div>
+
+  <p id="data-status" role="status" aria-live="polite">Reading local usage…</p>
+  <div class="grid stats">
+    <div class="stat">
+      <div class="head"><span class="lbl">01 — Cost</span><span class="corner"></span></div>
+      <div class="v" id="s-cost">—</div>
+      <div class="sub" id="s-cost-sub">—</div>
+    </div>
+    <div class="stat">
+      <div class="head"><span class="lbl">02 — Calls</span><span class="corner"></span></div>
+      <div class="v" id="s-calls">—</div>
+      <div class="sub" id="s-calls-sub">main / sub</div>
+    </div>
+    <div class="stat">
+      <div class="head"><span class="lbl">03 — Output</span><span class="corner"></span></div>
+      <div class="v" id="s-out">—</div>
+      <div class="sub" id="s-out-sub">tokens</div>
+    </div>
+    <div class="stat">
+      <div class="head"><span class="lbl" id="s-cache-lbl">04 — Cache R</span><span class="corner"></span></div>
+      <div class="v" id="s-cr">—</div>
+      <div class="sub" id="s-cr-sub">hit ratio</div>
+    </div>
+    <div class="stat">
+      <div class="head"><span class="lbl" id="s-qp-lbl">05 — Tokens</span><span class="corner"></span></div>
+      <div class="v" id="s-qp">—</div>
+      <div class="sub" id="s-qp-sub">all in + out</div>
+    </div>
+  </div>
+
+  <div class="grid row">
+    <div class="panel">
+      <h2>
+        <span><span class="accent-tick"></span>Cost over time
+          <span class="bucket-badge" id="resolved-bucket"></span>
+        </span>
+        <span class="toggle-group" id="seg-costview">
+          <button class="seg-btn active" data-v="role"  type="button"><span>By role</span></button>
+          <button class="seg-btn"        data-v="token" type="button"><span>By token</span></button>
+        </span>
+      </h2>
+      <div class="chart-wrap tall" id="chart-ts-wrap">
+        <div class="chart-empty" id="chart-ts-empty" hidden>
+          No data
+          <span class="hint">try a wider window, or turn Skip gaps off</span>
+        </div>
+      </div>
+      <div class="legend" id="ts-legend"></div>
+    </div>
+    <div class="panel">
+      <h2><span><span class="accent-tick" style="background:#FF2BA0"></span>Cost split</span></h2>
+      <div class="chart-wrap">
+        <canvas id="chart-split"></canvas>
+        <div class="chart-empty" id="chart-split-empty" hidden>No data</div>
+      </div>
+      <ul class="custom-legend" id="split-legend"></ul>
+    </div>
+  </div>
+
+  <div class="grid row">
+    <div class="panel">
+      <h2><span><span class="accent-tick" style="background:#0042FF"></span>By project</span></h2>
+      <div class="bar-list" id="bar-projects"></div>
+    </div>
+    <div class="panel">
+      <h2><span><span class="accent-tick" style="background:#FF6A1A"></span>By model</span></h2>
+      <div class="bar-list" id="bar-models"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>
+      <span><span class="accent-tick" style="background:#FFD81F"></span>Buckets</span>
+      <span class="bucket-toolbar">
+        <span id="bucket-jump" class="bucket-jump dt-field" tabindex="-1" title="Jump to this bucket"></span>
+        <span class="bucket-count" id="bucket-counter">0</span>
+      </span>
+    </h2>
+    <div class="table-wrap" id="bucket-scroll">
+      <table id="bucket-table">
+        <thead><tr id="bucket-thead-row">
+          <th>Bucket</th><th>Calls</th><th>Input</th>
+          <th id="th-c1">Output</th>
+          <th id="th-c2">Cache W</th>
+          <th id="th-c3">Cache R</th>
+          <th>Cost</th>
+        </tr></thead>
+        <tbody></tbody>
+        <tfoot><tr class="total">
+          <td>Total</td><td id="t-calls"></td><td id="t-in"></td>
+          <td id="t-c1"></td><td id="t-c2"></td><td id="t-c3"></td>
+          <td id="t-cost"></td>
+        </tr></tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><span class="msg">message</span></div>
+
+<script src="/static/app.js?v=0.2.0"></script>
+</body>
+</html>
