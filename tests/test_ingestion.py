@@ -178,3 +178,93 @@ def test_discovery_failure_preserves_published_snapshot(store, monkeypatch):
     with pytest.raises(OSError):
         store.refresh()
     assert store.snapshot() is first
+
+
+def session(identity, **extra):
+    record = meta(**extra)
+    record["payload"]["id"] = identity
+    return record
+
+
+def test_fork_rewritten_timestamps_and_embedded_parent_role(store):
+    parent = session("parent", source="cli", thread_source="user")
+    child = session("child", source="cli", thread_source="subagent", forked_from_id="parent")
+    child["timestamp"] = "2026-09-05T13:00:00Z"
+    first, second = token(), token(cumulative=2200)
+    write(store.sources.codex / "sessions/parent.jsonl", [parent, context(), first, second])
+    copied = [token(ts="2026-09-05T13:00:00Z"), token(cumulative=2200, ts="2026-09-05T13:00:00Z")]
+    new = token(cumulative=3300, ts="2026-09-05T13:01:00Z")
+    write(store.sources.codex / "sessions/child.jsonl", [child, parent, context(), *copied, new])
+    s = store.refresh()
+    assert s.frame.height == 3 and s.scan["inherited_events"] == 2
+    assert s.frame["is_sub"].sum() == 1
+    assert store.refresh().scan["inherited_events"] == 2  # Stable on unchanged refresh.
+    # A later real child call can have equal usage to an ancestor: it is not history.
+    write(store.sources.codex / "sessions/child.jsonl", [token(ts="2026-09-05T13:02:00Z")], append=True)
+    s = store.refresh()
+    assert s.frame.height == 4 and s.frame["is_sub"].sum() == 2
+
+
+def test_missing_parent_preserves_uncertain_usage_then_resolves(store):
+    parent = session("parent")
+    child = session("child", thread_source="subagent", forked_from_id="parent")
+    child["timestamp"] = "2026-09-05T13:00:00Z"
+    write(
+        store.sources.codex / "sessions/child.jsonl",
+        [
+            child,
+            parent,
+            context(),
+            token(ts="2026-09-05T13:01:00Z"),
+            token(cumulative=2200, ts="2026-09-05T13:02:00Z"),
+        ],
+    )
+    s = store.refresh()
+    assert s.frame.height == 2 and s.scan["unresolved_forks"] == 1
+    write(store.sources.codex / "sessions/parent.jsonl", [parent, context(), token()])
+    s = store.refresh()
+    assert s.frame.height == 2 and s.scan["inherited_events"] == 1 and s.scan["unresolved_forks"] == 0
+
+
+def test_unrelated_sessions_with_equal_usage_are_not_deduplicated(store):
+    for identity in ["a", "b"]:
+        write(store.sources.codex / f"sessions/{identity}.jsonl", [session(identity), context(), token()])
+    assert store.refresh().frame.height == 2
+
+
+def test_manual_user_fork_remains_main(store):
+    write(
+        store.sources.codex / "sessions/a.jsonl",
+        [session("a", forked_from_id="parent", thread_source="user"), context(), token()],
+    )
+    assert store.refresh().frame["is_sub"].sum() == 0
+
+
+def test_partial_fork_without_embedded_metadata(store):
+    parent = session("parent")
+    child = session("child", forked_from_id="parent", thread_source="subagent")
+    child["timestamp"] = "2026-09-05T13:00:00Z"
+    write(store.sources.codex / "sessions/parent.jsonl", [parent, context(), token(), token(cumulative=2200)])
+    write(
+        store.sources.codex / "sessions/child.jsonl",
+        [
+            child,
+            token(cumulative=2200, ts="2026-09-05T13:00:01Z"),
+            context(),
+            token(cumulative=3300, ts="2026-09-05T13:01:00Z"),
+        ],
+    )
+    s = store.refresh()
+    assert s.frame.height == 3 and s.scan["inherited_events"] == 1
+    assert all(model != "unknown" for model in s.models)
+
+
+def test_equal_parent_usage_after_fork_is_not_inherited(store):
+    parent = session("parent")
+    child = session("child", forked_from_id="parent", thread_source="subagent")
+    child["timestamp"] = "2026-09-05T13:00:00Z"
+    write(
+        store.sources.codex / "sessions/parent.jsonl", [parent, context(), token(ts="2026-09-05T14:00:00Z")]
+    )
+    write(store.sources.codex / "sessions/child.jsonl", [child, context(), token(ts="2026-09-05T14:00:01Z")])
+    assert store.refresh().frame.height == 2

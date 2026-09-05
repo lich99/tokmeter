@@ -90,6 +90,8 @@ def aggregate(snapshot, start, end, granularity="1h", tz="ET", fill_gaps=True, s
         pl.col("cost").sum(),
         (~pl.col("priced")).sum().alias("unpricedCalls"),
         pl.col("tier_assumed").sum().alias("assumedTierCalls"),
+        (pl.col("tier") == 0).sum().alias("unknownTierCalls"),
+        (pl.col("tier_assumed") & (pl.col("tier") != 0)).sum().alias("unsupportedTierCalls"),
     ).row(0, named=True)
     totals = {**sums, "calls": sub.height}
     for key, flag in (("main", 0), ("sub", 1)):
@@ -118,6 +120,7 @@ def aggregate(snapshot, start, end, granularity="1h", tz="ET", fill_gaps=True, s
 
     by_project = breakdown("project", snapshot.projects)
     by_model = breakdown("model", snapshot.models)
+    by_tier = breakdown("tier", ("Unknown", "Standard", "Fast", "Priority / Fast", "Flex"))
     cost_split = [
         {"key": key, "label": label, "val": sub[col].sum() or 0.0, "color": color}
         for col, key, label, color in COMPONENTS
@@ -156,6 +159,7 @@ def aggregate(snapshot, start, end, granularity="1h", tz="ET", fill_gaps=True, s
         totals=totals,
         byProject=by_project,
         byModel=by_model,
+        byTier=by_tier,
         buckets=buckets,
         source=source,
         timezone=tz,

@@ -17,6 +17,7 @@ pub struct Row {
     pub tier: u8,
     // input, cached, output (including reasoning), reasoning, write 5m, write 1h, read.
     pub tokens: [i64; 7],
+    pub cumulative: Option<[i64; 5]>,
 }
 
 #[derive(Default, Clone)]
@@ -26,6 +27,9 @@ pub struct State {
     pub sub: bool,
     pub total: Option<[i64; 5]>,
     pub fork_time: Option<i64>,
+    pub session_id: Text,
+    pub ancestors: Vec<Text>,
+    pub seen_meta: bool,
 }
 
 #[derive(Default, Clone, Debug, serde::Serialize)]
@@ -52,6 +56,12 @@ struct Envelope {
 struct Payload {
     #[serde(rename = "type")]
     kind: Option<String>,
+    id: Option<String>,
+    session_id: Option<String>,
+    timestamp: Option<String>,
+    thread_source: Option<String>,
+    parent_thread_id: Option<String>,
+    agent_path: Option<String>,
     model: Option<String>,
     cwd: Option<String>,
     source: Option<Value>,
@@ -161,16 +171,37 @@ pub fn parse(line: &[u8], source: u8, state: &mut State, d: &mut Diagnostics) ->
     let p = event.payload.unwrap_or_default();
     match event.kind.as_str() {
         "session_meta" => {
+            let id = p.id.or(p.session_id).unwrap_or_default();
+            // Forks embed their parent's SessionMeta, with rewritten outer timestamps.
+            // The first header owns this file; embedded headers must not change its role.
+            if state.seen_meta {
+                if !id.is_empty() && id != state.session_id.as_ref() {
+                    let id: Text = id.into();
+                    if !state.ancestors.contains(&id) {
+                        state.ancestors.push(id);
+                    }
+                }
+                return None;
+            }
+            state.seen_meta = true;
+            state.session_id = id.into();
             if let Some(cwd) = p.cwd {
                 state.project = cwd.into();
             }
-            state.sub = p.agent_role.is_some()
-                || p.agent_nickname.is_some()
-                || p.source.as_ref().and_then(|s| s.get("subagent")).is_some();
-            state.fork_time = p
-                .forked_from_id
-                .as_ref()
-                .and_then(|_| timestamp(event.timestamp.as_deref()));
+            let nonempty = |s: &Option<String>| s.as_ref().is_some_and(|s| !s.is_empty());
+            state.sub = p.thread_source.as_deref() == Some("subagent")
+                || p.source.as_ref().and_then(|s| s.get("subagent")).is_some()
+                || nonempty(&p.agent_role)
+                || nonempty(&p.agent_nickname)
+                || (p.thread_source.as_deref() != Some("user")
+                    && (nonempty(&p.parent_thread_id)
+                        || p.agent_path
+                            .as_ref()
+                            .is_some_and(|s| s.starts_with("/root/"))));
+            if let Some(parent) = p.forked_from_id.filter(|s| !s.is_empty()) {
+                state.ancestors.push(parent.into());
+                state.fork_time = timestamp(p.timestamp.as_deref().or(event.timestamp.as_deref()));
+            }
             None
         }
         "turn_context" => {
@@ -200,8 +231,8 @@ pub fn parse(line: &[u8], source: u8, state: &mut State, d: &mut Diagnostics) ->
                 return None;
             }
             let ts = timestamp(event.timestamp.as_deref())?;
-            if let Some(total) = info.total_token_usage {
-                let total = total.cumulative();
+            let cumulative = info.total_token_usage.map(|u| u.cumulative());
+            if let Some(total) = cumulative {
                 if state.total == Some(total) {
                     d.duplicate_snapshots += 1;
                     return None;
@@ -231,6 +262,7 @@ pub fn parse(line: &[u8], source: u8, state: &mut State, d: &mut Diagnostics) ->
                 sub: state.sub,
                 tier: served,
                 tokens: t,
+                cumulative,
             })
         }
         _ => None,
@@ -287,5 +319,6 @@ fn claude(event: Envelope, state: &mut State, d: &mut Diagnostics) -> Option<Row
         sub: state.sub,
         tier: served,
         tokens: t,
+        cumulative: None,
     })
 }

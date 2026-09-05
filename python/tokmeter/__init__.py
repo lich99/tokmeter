@@ -1,6 +1,6 @@
 """Local usage accounting; no network or persistent usage cache."""
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 
 def main():

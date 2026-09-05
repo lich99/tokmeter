@@ -58,6 +58,7 @@ pub struct Report {
     pub inherited_events: usize,
     pub cumulative_resets: usize,
     pub pending_files: usize,
+    pub unresolved_forks: usize,
     pub errors: Vec<String>,
     pub updated: bool,
 }
@@ -65,6 +66,8 @@ pub struct Report {
 pub struct Engine {
     files: HashMap<String, FileState>,
     initialized: bool,
+    inherited_rows: usize,
+    unresolved_forks: usize,
 }
 
 impl Engine {
@@ -146,7 +149,12 @@ impl Engine {
         report
     }
 
-    pub fn export(&self) -> (serde_json::Value, Vec<u8>) {
+    pub fn add_export_diagnostics(&self, report: &mut Report) {
+        report.inherited_events += self.inherited_rows;
+        report.unresolved_forks = self.unresolved_forks;
+    }
+
+    pub fn export(&mut self) -> (serde_json::Value, Vec<u8>) {
         let mut models = vec![];
         let mut projects = vec![];
         let mut model_ids = HashMap::new();
@@ -155,8 +163,62 @@ impl Engine {
         let mut messages: HashMap<&str, usize> = HashMap::new();
         let mut files: Vec<_> = self.files.iter().collect();
         files.sort_by(|a, b| a.0.cmp(b.0));
+        // Exact usage signatures are matched only against declared ancestors and
+        // only while traversing the copied prefix. Equal usage in unrelated sessions
+        // or after the fork's first new call must remain separate billable events.
+        let by_session: HashMap<_, _> = files
+            .iter()
+            .filter(|(_, f)| !f.parser.session_id.is_empty())
+            .map(|(_, f)| (f.parser.session_id.as_ref(), *f))
+            .collect();
+        let needed: HashSet<_> = files
+            .iter()
+            .flat_map(|(_, f)| f.parser.ancestors.iter().map(|id| id.as_ref()))
+            .collect();
+        let signatures: HashMap<_, HashMap<_, i64>> = by_session
+            .iter()
+            .filter(|(id, _)| needed.contains(**id))
+            .map(|(&id, f)| {
+                let mut usages = HashMap::new();
+                for r in &f.rows {
+                    if let Some(total) = r.cumulative.as_ref() {
+                        usages
+                            .entry((total, &r.tokens))
+                            .and_modify(|ts: &mut i64| *ts = (*ts).min(r.timestamp))
+                            .or_insert(r.timestamp);
+                    }
+                }
+                (id, usages)
+            })
+            .collect();
+        let mut inherited_rows = 0;
+        let mut unresolved_forks = 0;
         for (_, file) in files {
+            let parents: Vec<_> = file
+                .parser
+                .ancestors
+                .iter()
+                .filter_map(|id| signatures.get(id.as_ref()))
+                .collect();
+            let mut copied_prefix = !file.parser.ancestors.is_empty();
+            if copied_prefix && parents.is_empty() {
+                unresolved_forks += 1;
+            }
             for row in &file.rows {
+                if copied_prefix && row.source == 1 {
+                    let key = row.cumulative.as_ref().map(|total| (total, &row.tokens));
+                    if key.is_some_and(|k| {
+                        parents.iter().any(|set| {
+                            set.get(&k).is_some_and(|ts| {
+                                file.parser.fork_time.is_none_or(|born| *ts < born)
+                            })
+                        })
+                    }) {
+                        inherited_rows += 1;
+                        continue;
+                    }
+                    copied_prefix = false;
+                }
                 if row.source == 0 && !row.id.is_empty() {
                     if let Some(&index) = messages.get(row.id.as_ref()) {
                         let old = selected[index];
@@ -202,6 +264,8 @@ impl Engine {
                 bytes.extend_from_slice(&value.to_le_bytes());
             }
         }
+        self.inherited_rows = inherited_rows;
+        self.unresolved_forks = unresolved_forks;
         (
             serde_json::json!({"schema": 1, "rows": selected.len(), "models": models, "projects": projects}),
             bytes,

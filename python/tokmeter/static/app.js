@@ -329,24 +329,10 @@ function toast(msg, kind=''){
   el._to = setTimeout(()=>el.classList.remove('show'), 2400);
 }
 
-// Number count-up animation
-const _animState = new WeakMap();
-function animateNumber(el, to, formatter, dur=180){
-  if (matchMedia('(prefers-reduced-motion: reduce)').matches) {el.textContent=formatter(to);return;}
-  const prev = _animState.get(el) || 0;
-  if (prev === to) { el.textContent = formatter(to); return; }
-  const t0 = performance.now();
-  const start = prev;
-  cancelAnimationFrame(el._raf || 0);
-  function step(now){
-    const t = Math.min(1, (now - t0)/dur);
-    const eased = 1 - Math.pow(1 - t, 4);
-    const v = start + (to - start) * eased;
-    el.textContent = formatter(v);
-    if (t < 1) el._raf = requestAnimationFrame(step);
-    else _animState.set(el, to);
-  }
-  el._raf = requestAnimationFrame(step);
+// Live accounting values update immediately; polling must never replay entry animations.
+function setNumber(el, value, formatter){
+  const text = formatter(value);
+  if (el.textContent !== text) el.textContent = text;
 }
 
 async function api(path){
@@ -390,11 +376,14 @@ async function loadAggregate(quiet=false){
     render(data);
     const issues = [];
     if (data.totals.unpricedCalls) issues.push(`${fmt.n(data.totals.unpricedCalls)} unpriced calls excluded`);
-    if (data.totals.assumedTierCalls) issues.push(`${fmt.n(data.totals.assumedTierCalls)} calls estimated at standard rates`);
+    if (data.totals.unknownTierCalls) issues.push(`${fmt.n(data.totals.unknownTierCalls)} calls have no recorded tier; standard-rate reference only`);
+    if (data.totals.unsupportedTierCalls) issues.push(`${fmt.n(data.totals.unsupportedTierCalls)} calls have no supported tier price`);
+    if (data.scan?.unresolved_forks) issues.push(`${data.scan.unresolved_forks} fork histories could not be verified`);
     if (data.scan?.malformed || data.scan?.invalid_usage) issues.push(`${(data.scan.malformed||0)+(data.scan.invalid_usage||0)} invalid records skipped`);
     if (data.scan?.errors?.length) issues.push(`${data.scan.errors.length} files could not be read`);
     if (data.error) issues.push(data.error);
     document.getElementById('data-status').textContent = `API-equivalent estimate · prices ${data.pricingVersion}` + (issues.length ? ' · '+issues.join(' · ') : '');
+    document.getElementById('tier-status').textContent = 'Recorded processing tier · ' + (data.byTier || []).map(row=>`${row.name}: ${fmt.n(row.calls)}`).join(' · ');
     document.getElementById('gen-info').textContent = `${fmt.n(data.totalRecords)} REC · ${fmt.n(data.buckets.ts.length)} BUCKETS · UPDATED ${new Date(data.lastRefresh*1000).toLocaleTimeString()}`;
     saveState();
   } catch (error) {
@@ -416,7 +405,7 @@ function timeAgo(ms){
 }
 
 // ───── uPlot time chart (canvas, handles 100k+ points) ─────
-let UPLOT_TS = null;
+let UPLOT_TS = null, timeChartState = null;
 
 // Full bucket label — used in tooltips and table where horizontal room is plenty.
 function formatBucketKey(utcMs, _offMs, granularity){
@@ -444,11 +433,11 @@ function ensureUplotTooltip(parent){
 function renderTimeChartUplot(b, granularity, source){
   const wrap = document.getElementById('chart-ts-wrap');
   if (!wrap || !window.uPlot) return;
-  if (UPLOT_TS) { UPLOT_TS.destroy(); UPLOT_TS = null; }
   const empty = document.getElementById('chart-ts-empty');
   const legendEl = document.getElementById('ts-legend');
   const N = b.ts.length;
   if (N === 0) {
+    if (UPLOT_TS) { UPLOT_TS.destroy(); UPLOT_TS = null; timeChartState = null; }
     if (empty) empty.hidden = false;
     if (legendEl) legendEl.innerHTML = '';
     return;
@@ -501,6 +490,23 @@ function renderTimeChartUplot(b, granularity, source){
       stacked[l][i] = s;
     }
   }
+
+  const data = [xs, ...stacked.slice().reverse(), cumArr];
+  const key = JSON.stringify([granularity, source, curTz, curGaps, curCostView]);
+  const signature = JSON.stringify(b);
+  const view = {b, N, layers, cumArr};
+  if (UPLOT_TS && timeChartState?.key === key) {
+    Object.assign(timeChartState.view, view);
+    if (timeChartState.signature !== signature) {
+      UPLOT_TS.setData(data);
+      timeChartState.signature = signature;
+    } else if (!isSkip && (UPLOT_TS.scales.x.min !== curStart/1000 || UPLOT_TS.scales.x.max !== curEnd/1000)) {
+      UPLOT_TS.setScale('x', {min:curStart/1000, max:curEnd/1000});
+    }
+    return;
+  }
+  if (UPLOT_TS) UPLOT_TS.destroy();
+  timeChartState = {key, signature, view};
 
   // Update legend (HTML, not Chart.js)
   if (legendEl) {
@@ -591,7 +597,7 @@ function renderTimeChartUplot(b, granularity, source){
     legend: { show: false },
     scales: {
       x: isSkip
-        ? { time: false, range: () => [-0.5, Math.max(0.5, N - 0.5)] }
+        ? { time: false, range: () => [-0.5, Math.max(0.5, view.N - 0.5)] }
         : { time: true, range: () => [
             curStart / 1000,
             curEnd / 1000,
@@ -615,7 +621,6 @@ function renderTimeChartUplot(b, granularity, source){
         space: 130, size: 50, gap: 4,
       };
       // Compute the actual time span of visible data for adaptive label format.
-      const dataSpanMs = N >= 2 ? (b.ts[N - 1] - b.ts[0]) : 86400000;
       const xOrdinal = {
         ...xTime,
         space: 160,
@@ -625,13 +630,13 @@ function renderTimeChartUplot(b, granularity, source){
           const stride = Math.max(1, Math.ceil((sMax - sMin) / target));
           const out = [];
           let i = Math.max(0, Math.ceil(sMin / stride) * stride);
-          while (i <= sMax) { if (i < N) out.push(i); i += stride; }
+          while (i <= sMax) { if (i < view.N) out.push(i); i += stride; }
           return out;
         },
         values: (u, splits) => splits.map(v => {
           const i = Math.round(v);
-          if (i < 0 || i >= N) return '';
-          return formatBucketKeyAxis(b.ts[i], offMs, granularity, dataSpanMs);
+          if (i < 0 || i >= view.N) return '';
+          return formatBucketKeyAxis(view.b.ts[i], offMs, granularity, view.N >= 2 ? view.b.ts[view.N-1]-view.b.ts[0] : 86400000);
         }),
       };
       const yLeft = {
@@ -650,12 +655,12 @@ function renderTimeChartUplot(b, granularity, source){
       return [isSkip ? xOrdinal : xTime, yLeft, yRight];
     })(),
     series: (() => {
-      // x  | layers REVERSED (largest first) | cumulative line
+      // x  | view.layers REVERSED (largest first) | cumulative line
       const arr = [{ value: (u, v) => v == null ? '—' : fmtKey(v) }];
-      for (let l = layers.length - 1; l >= 0; l--) {
+      for (let l = view.layers.length - 1; l >= 0; l--) {
         arr.push({
-          label: layers[l].label,
-          stroke: layers[l].color, fill: layers[l].color, width: 0,
+          label: view.layers[l].label,
+          stroke: view.layers[l].color, fill: view.layers[l].color, width: 0,
           paths: fastBars(), points: { show: false },
         });
       }
@@ -669,16 +674,16 @@ function renderTimeChartUplot(b, granularity, source){
       setCursor: [
         u => {
           const idx = u.cursor.idx;
-          if (idx == null || idx < 0 || idx >= N) { tip.style.opacity = '0'; return; }
-          const key = formatBucketKey(b.ts[idx], offMs, granularity);
-          const layerLines = layers.map(l =>
+          if (idx == null || idx < 0 || idx >= view.N) { tip.style.opacity = '0'; return; }
+          const key = formatBucketKey(view.b.ts[idx], offMs, granularity);
+          const layerLines = view.layers.map(l =>
             `<div class="t-row"><span class="lbl">${l.label}</span><span class="v">$${(l.arr[idx]||0).toFixed(2)}</span></div>`
           ).join('');
           tip.innerHTML = `
             <div class="t-key">${key}</div>
             ${layerLines}
-            <div class="t-row"><span class="lbl">Cumulative</span><span class="v">$${cumArr[idx].toFixed(2)}</span></div>
-            <div class="t-row"><span class="lbl">Calls</span><span class="v">${b.calls[idx].toLocaleString()}</span></div>`;
+            <div class="t-row"><span class="lbl">Cumulative</span><span class="v">$${view.cumArr[idx].toFixed(2)}</span></div>
+            <div class="t-row"><span class="lbl">Calls</span><span class="v">${view.b.calls[idx].toLocaleString()}</span></div>`;
           const left = u.cursor.left;
           const top = u.cursor.top;
           const tw = tip.offsetWidth, th = tip.offsetHeight;
@@ -691,30 +696,26 @@ function renderTimeChartUplot(b, granularity, source){
     },
   };
 
-  // Data array: x, layers REVERSED (top-most cumulative first), cumulative
-  const data = [xs];
-  for (let l = layers.length - 1; l >= 0; l--) data.push(stacked[l]);
-  data.push(cumArr);
   UPLOT_TS = new uPlot(opts, data, wrap);
 }
 
 function render(d){
   const t = d.totals;
-  animateNumber(document.getElementById('s-cost'), t.cost, v => money(v,t.calls,t.unpricedCalls));
+  setNumber(document.getElementById('s-cost'), t.cost, v => money(v,t.calls,t.unpricedCalls));
   const dur = (curEnd - curStart)/3600000;
   document.getElementById('s-cost-sub').textContent =
     `${fmt.$(t.cost / Math.max(dur,0.01))}/H · ${dur.toFixed(1)}H WINDOW`;
-  animateNumber(document.getElementById('s-calls'), t.calls, fmt.n);
+  setNumber(document.getElementById('s-calls'), t.calls, fmt.n);
   document.getElementById('s-calls-sub').textContent =
     `${t.main.calls.toLocaleString()} MAIN · ${t.sub.calls.toLocaleString()} SUB`;
-  animateNumber(document.getElementById('s-out'), t.out, fmt.short);
+  setNumber(document.getElementById('s-out'), t.out, fmt.short);
   document.getElementById('s-out-sub').textContent = `${fmt.n(t.out)} TOKENS`;
   // Cache stat: for Claude Code → cache_read; for Codex → cached_input
   const isCodex = (d.source === 'codex');
   const cacheTok = (t.cached || 0) + t.cr;
   const cacheLbl = isCodex ? '04 — CACHED INPUT' : '04 — CACHE R';
   document.getElementById('s-cache-lbl').textContent = cacheLbl;
-  animateNumber(document.getElementById('s-cr'), cacheTok, fmt.short);
+  setNumber(document.getElementById('s-cr'), cacheTok, fmt.short);
   if (isCodex) {
     // Codex: hit ratio = cached / total_input
     const totalIn = t.in;
@@ -730,7 +731,7 @@ function render(d){
   const qp = isCodex
     ? (t.in + t.out)
     : (t.in + t.cw5m + t.cw1h + t.cr + t.out);
-  animateNumber(document.getElementById('s-qp'), qp, fmt.short);
+  setNumber(document.getElementById('s-qp'), qp, fmt.short);
   document.getElementById('s-qp-sub').textContent =
     isCodex ? `${fmt.n(qp)} TOKENS · IN+OUT`
             : `${fmt.n(qp)} TOKENS · IN+CACHE+OUT`;
@@ -749,26 +750,31 @@ function render(d){
     _lastSplitKey = splitKey;
     const ctx2 = document.getElementById('chart-split');
     const splitEmpty = document.getElementById('chart-split-empty');
-    if (CHART_SPLIT) { CHART_SPLIT.destroy(); CHART_SPLIT = null; }
     // Backend now sends an array [{key,label,val,color}] sized to the source
     // (5 slices for Claude Code, 4 for Codex including a Reasoning slice).
     const cats = (d.costSplit || []).filter(c => c.val > 0)
       .map(c => ({ label: c.label, val: c.val, c: c.color }));
     const splitLegend = document.getElementById('split-legend');
     if (cats.length === 0) {
+      if (CHART_SPLIT) { CHART_SPLIT.destroy(); CHART_SPLIT = null; }
       if (splitEmpty) splitEmpty.hidden = false;
       if (splitLegend) splitLegend.innerHTML = '';
       // Skip Chart.js construction when there's nothing to show
       _lastSplitKey = splitKey;
     } else {
       if (splitEmpty) splitEmpty.hidden = true;
-    CHART_SPLIT = new Chart(ctx2, {
+    if (CHART_SPLIT) {
+      CHART_SPLIT.data.labels = cats.map(c=>c.label);
+      CHART_SPLIT.data.datasets[0].data = cats.map(c=>c.val);
+      CHART_SPLIT.data.datasets[0].backgroundColor = cats.map(c=>c.c);
+      CHART_SPLIT.update('none');
+    } else CHART_SPLIT = new Chart(ctx2, {
       type:'doughnut',
       data:{labels:cats.map(c=>c.label), datasets:[{data:cats.map(c=>c.val),
         backgroundColor:cats.map(c=>c.c), borderColor:'#FFFFFF', borderWidth:4, hoverOffset: 8}]},
       options:{
         responsive:true, maintainAspectRatio:false, cutout:'62%',
-        animation: { duration: matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 180, easing: 'easeOutQuart', animateRotate: true },
+        animation: false,
         plugins:{
           legend:{display:false},
           tooltip:{backgroundColor:'#0A0A0A', titleColor:'#FFFFFF', bodyColor:'#D4D4D4',
@@ -776,7 +782,7 @@ function render(d){
             titleFont: {family: 'IBM Plex Mono', size: 11, weight: '500'},
             bodyFont: {family: 'IBM Plex Mono', size: 11.5, weight: '400'},
             boxPadding: 10, boxWidth: 10, boxHeight: 10,
-            callbacks:{label:c=>`  ${c.label}    $${c.parsed.toFixed(2)} · ${(c.parsed/t.cost*100).toFixed(1)}%`}}
+            callbacks:{label:c=>`  ${c.label}    $${c.parsed.toFixed(2)} · ${(c.parsed/c.dataset.data.reduce((sum,v)=>sum+v,0)*100).toFixed(1)}%`}}
         }
       }
     });
@@ -811,11 +817,8 @@ function renderBars(elId, items){
     <div class="bar-item">
       <div class="name" title="${escapeHtml(x.name)}">${escapeHtml(x.name)}</div>
       <div class="val">${money(x.cost,x.calls,x.unpricedCalls)}<span class="pill">${x.calls}</span></div>
-      <div class="bar-track"><div class="bar-fill" data-pct="${max>0?(x.cost/max*100):0}"></div></div>
+      <div class="bar-track"><div class="bar-fill" style="width:${max>0?(x.cost/max*100):0}%"></div></div>
     </div>`).join('');
-  requestAnimationFrame(()=>{
-    el.querySelectorAll('.bar-fill').forEach(f => { f.style.width = f.dataset.pct + '%'; });
-  });
 }
 
 // ───── Virtual-scrolled bucket table — only paints visible rows ─────

@@ -10,7 +10,7 @@ network pricing requests, or persistent usage cache.
 
 ## Install
 
-This checkout is the **0.2.0 source release**. Building from source requires
+This checkout is the **0.2.1 source release**. Building from source requires
 Python 3.10+ and a Rust toolchain (1.83+):
 
 ```bash
@@ -21,13 +21,13 @@ tokmeter
 An already-built platform wheel can be installed without Rust:
 
 ```bash
-python -m pip install /path/to/tokmeter-0.2.0-<platform>.whl
+python -m pip install /path/to/tokmeter-0.2.1-<platform>.whl
 ```
 
 The dashboard opens at `http://127.0.0.1:8765/`. Press `Ctrl-C` to stop.
 The previous single-file `uv run tokmeter.py` entry point has been replaced by
 the package and native extension. A PyPI installation only includes this upgrade
-after version 0.2.0 is published there.
+after version 0.2.1 is published there.
 
 ```bash
 tokmeter --port 8866 --no-open
@@ -71,17 +71,24 @@ reread after externally editing historical logs.
 - Cost by agent role and all seven token cost components; virtualized table.
 - Adaptive buckets from one minute to one day, capped at 5,000 per response.
 - Refresh every two seconds while visible; outdated requests cannot replace
-  a newer selection. Manual refresh schedules an asynchronous source scan.
+  a newer selection. Live updates reuse charts and do not animate numbers or
+  replay chart entry animations. Manual refresh schedules an asynchronous scan.
 - JS, CSS, and chart libraries are bundled. No CDN or web font is needed.
 
 ## Counting and pricing
 
 Codex's repeated unchanged cumulative usage snapshots are counted once. A
-cumulative reset starts a new segment. An explicit fork's historical events
-before its creation timestamp are excluded when that metadata exists; logs
-without sufficient fork metadata cannot be reliably distinguished from newly
-consumed usage. Claude messages are deduplicated by message ID, retaining the
-snapshot with the greatest output usage (latest timestamp breaks ties).
+cumulative reset starts a new segment. The **first session header** owns the
+file's main/subagent identity; a copied parent header cannot overwrite it.
+For forks, inherited prefixes are matched against declared ancestors using
+both cumulative and last-call token counts. Matching ancestor usage must
+predate the fork. This handles rewritten timestamps and partial history that
+omits parent headers. Matching stops at the first new call; unrelated sessions
+are never deduplicated against each other. Missing ancestor logs are reported
+as unresolved forks and their uncertain usage is preserved.
+
+Claude messages are deduplicated by message ID, retaining the snapshot with
+the greatest output usage (latest timestamp breaks ties).
 Partial final JSONL lines are retried after the next append. Malformed usage
 records are skipped individually and reported in the status.
 
@@ -95,7 +102,11 @@ with dated model suffix normalization and explicit aliases. Unknown models
 remain visible as **unpriced**, and partial totals are marked. Service-tier
 multipliers are applied only when a supported tier is recorded on the usage
 event; a requested setting in `turn_context` is not proof of a served tier.
-Missing or unsupported tiers are labeled as estimates at standard rates.
+The dashboard and API expose recorded Standard, Fast, Priority/Fast, Flex,
+and **Unknown** tiers separately. Unknown does not mean Standard: its displayed
+cost is only a standard-rate reference. Existing Codex logs often omit this
+field, so historical Fast usage cannot be recovered from today's settings.
+Unsupported tier prices are reported separately.
 
 The catalog is a dated reference, **not a historical billing engine**. Its rates
 apply to the selected history; subscription charges, negotiated discounts,
@@ -158,7 +169,7 @@ python -B scripts/benchmark.py --real --runs 3 # Explicitly read local history
 
 The benchmark prints only aggregate performance metadata and removes temporary
 inputs on exit. It does not purge OS file caches. On the development Mac, about
-10.4 GB / 5,934 files loaded in 1.05–1.48 seconds in three initial measurements,
-with full-history aggregation in 62–84 ms. Results depend on storage, CPU,
-log shape, and OS cache state; they are not a cold-disk guarantee. Run each
-measurement in a fresh process for an independent peak-RSS value.
+10.4 GB / 5,934 files loaded in about 1.5 seconds after fork-history deduplication
+was enabled. Results depend on storage, CPU, log shape, and OS cache state;
+this is not a cold-disk guarantee. Run each measurement in a fresh process for
+an independent peak-RSS value.

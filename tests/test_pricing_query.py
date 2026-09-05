@@ -106,3 +106,29 @@ def test_invalid_custom_prices_fail_before_start(tmp_path, entry):
     path.write_text(json.dumps({"models": {"custom": entry}}))
     with pytest.raises(ValueError):
         Catalog(path)
+
+
+def test_recorded_tiers_have_distinct_prices_and_unknown_stays_unknown(store):
+    write(
+        store.sources.codex / "sessions/a.jsonl",
+        [
+            meta(),
+            context(),
+            token(service_tier="standard"),
+            token(cumulative=2200, service_tier="fast"),
+            token(cumulative=3300, service_tier="priority"),
+            token(cumulative=4400),
+        ],
+    )
+    s = store.refresh()
+    costs = dict(zip(s.frame["tier"], s.frame["cost"]))
+    assert costs[2] == pytest.approx(costs[1] * 2)
+    assert costs[3] == pytest.approx(costs[1] * 2)
+    result = aggregate(s, ms("2026-09-05T00:00Z"), ms("2026-09-06T00:00Z"), source="codex")
+    assert result["totals"]["unknownTierCalls"] == 1
+    assert {r["name"]: r["calls"] for r in result["byTier"]} == {
+        "Standard": 1,
+        "Fast": 1,
+        "Priority / Fast": 1,
+        "Unknown": 1,
+    }

@@ -31,12 +31,14 @@ mod binding {
                 .map_err(|e| PyValueError::new_err(e.to_string()))?;
             let (metadata, buffer) = py.detach(|| {
                 let mut engine = self.inner.lock().expect("engine lock poisoned");
-                let report = engine.refresh(inputs, workers);
+                let mut report = engine.refresh(inputs, workers);
                 if report.updated || force {
                     let (mut metadata, buffer) = engine.export();
+                    engine.add_export_diagnostics(&mut report);
                     metadata["scan"] = serde_json::to_value(report).expect("serializable report");
                     (metadata.to_string(), Some(buffer))
                 } else {
+                    engine.add_export_diagnostics(&mut report);
                     (serde_json::json!({"scan": report}).to_string(), None)
                 }
             });
