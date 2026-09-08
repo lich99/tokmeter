@@ -18,3 +18,4 @@ native/target/
 .pytest_cache/
 
 .ruff_cache/
+.pypirc

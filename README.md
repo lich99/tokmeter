@@ -10,24 +10,23 @@ network pricing requests, or persistent usage cache.
 
 ## Install
 
-This checkout is the **0.2.1 source release**. Building from source requires
-Python 3.10+ and a Rust toolchain (1.83+):
+Install or upgrade from PyPI with Python 3.10+:
 
 ```bash
-python -m pip install .
+python -m pip install --upgrade tokmeter
 tokmeter
 ```
 
-An already-built platform wheel can be installed without Rust:
+Prebuilt wheels install without Rust. If no wheel matches your platform, pip
+builds from source and requires a Rust toolchain (1.83+). To install this checkout:
 
 ```bash
-python -m pip install /path/to/tokmeter-0.2.1-<platform>.whl
+python -m pip install .
 ```
 
 The dashboard opens at `http://127.0.0.1:8765/`. Press `Ctrl-C` to stop.
 The previous single-file `uv run tokmeter.py` entry point has been replaced by
-the package and native extension. A PyPI installation only includes this upgrade
-after version 0.2.1 is published there.
+the package and native extension in version 0.2.1.
 
 ```bash
 tokmeter --port 8866 --no-open

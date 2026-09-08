@@ -28,7 +28,7 @@ manifest-path = "native/Cargo.toml"
 python-source = "python"
 module-name = "tokmeter._native"
 features = ["pyo3/extension-module"]
-include = ["python/tokmeter/static/**/*", "python/tokmeter/prices.json", { path = "tests/**/*", format = "sdist" }, { path = "scripts/benchmark.py", format = "sdist" }]
+include = ["python/tokmeter/static/**/*", "python/tokmeter/prices.json", { path = "LICENSE", format = "sdist" }, { path = "tests/**/*", format = "sdist" }, { path = "scripts/benchmark.py", format = "sdist" }]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
